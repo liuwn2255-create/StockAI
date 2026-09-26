@@ -1,0 +1,12 @@
+name = "stockai-worker"
+main = "index.js"
+compatibility_date = "2026-09-26"
+
+[vars]
+AI_MODEL = "gpt-5.6-luna"
+
+[observability]
+enabled = true
+
+# AI_API_KEY and AI_API_URL must be configured as Worker Secrets.
+# Do NOT put secrets in this file.

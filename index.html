@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockAI｜AI 股票資訊研究助手</title>
+  <meta name="description" content="StockAI AI 股票資訊研究助手：整理公開資訊、新聞與財務資料，協助投資人快速掌握個股資訊。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#">
+      <span class="brand-mark">↗</span>
+      <span>
+        <strong>Stock<span>AI</span></strong>
+        <small>AI 股票資訊研究助手</small>
+      </span>
+    </a>
+    <div class="profile">
+      <div class="profile-text">
+        <strong>化明</strong>
+        <span>網站主理人</span>
+      </div>
+      <img src="images/avatar.png" alt="網站主理人頭像">
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">SMART MARKET RESEARCH</div>
+      <h1>讓 AI 幫你整理<br><span>值得知道的股票資訊</span></h1>
+      <p class="hero-desc">輸入股票名稱或代號，快速整理公司資料、財務資訊、最新消息與市場關注焦點。</p>
+
+      <form class="search-box" id="searchForm">
+        <span class="search-icon">⌕</span>
+        <input id="stockInput" type="text" placeholder="輸入股票名稱或代號，例如：台積電 / 2330" autocomplete="off">
+        <button type="submit">開始研究</button>
+      </form>
+
+      <div class="hot-search">
+        <span>熱門查詢</span>
+        <button data-symbol="2330">2330 台積電</button>
+        <button data-symbol="2317">2317 鴻海</button>
+        <button data-symbol="2454">2454 聯發科</button>
+        <button data-symbol="0050">0050 元大台灣50</button>
+      </div>
+    </section>
+
+    <section class="disclaimer-strip" aria-label="重要使用提醒">
+      <div class="disclaimer-icon">ⓘ</div>
+      <div>
+        <strong>重要提醒：本網站僅提供公開資訊整理與研究參考</strong>
+        <p>AI 摘要可能有遺漏或錯誤，不構成投資、買賣或其他專業建議；投資決策請自行查證並自負風險。</p>
+      </div>
+      <button type="button" id="openDisclaimer">查看完整免責條款</button>
+    </section>
+
+    <section class="research" id="researchSection">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">RESEARCH RESULT</span>
+          <h2 id="resultTitle">2330 台積電</h2>
+          <p id="resultSubtitle">台灣積體電路製造股份有限公司 · 半導體</p>
+        </div>
+        <span class="demo-badge" id="dataBadge">資料來源待接</span>
+      </div>
+
+      <section class="research-status" aria-label="研究資料狀態">
+        <div class="research-status-head">
+          <div><span class="section-kicker">DATA STATUS</span><h3>研究資料狀態</h3><p>只顯示實際取得或明確標示不可用的資料，不用假數字補空缺。</p></div>
+          <div class="status-actions"><button class="diagnostic-btn" id="diagnosticBtn" type="button">檢查後端</button><span class="status-summary" id="researchStatusSummary">尚未連線</span></div>
+        </div>
+        <div class="status-grid" id="researchStatusGrid">
+          <div class="status-item pending" data-module="profile"><span class="status-dot"></span><strong>公司資料</strong><small>等待資料</small></div>
+          <div class="status-item pending" data-module="revenue"><span class="status-dot"></span><strong>月營收</strong><small>等待資料</small></div>
+          <div class="status-item pending" data-module="financials"><span class="status-dot"></span><strong>損益</strong><small>等待資料</small></div>
+          <div class="status-item pending" data-module="balance"><span class="status-dot"></span><strong>資產負債</strong><small>等待資料</small></div>
+          <div class="status-item pending" data-module="cashflow"><span class="status-dot"></span><strong>現金流</strong><small>等待資料</small></div>
+          <div class="status-item pending" data-module="announcements"><span class="status-dot"></span><strong>重大訊息</strong><small>等待資料</small></div>
+        </div>
+      </section>
+
+      <div class="stock-hero-card">
+        <div>
+          <div class="ticker" id="resultTicker">TWSE · 2330</div>
+          <h3 id="resultName">台積電</h3>
+          <p id="resultFullName">台灣積體電路製造股份有限公司</p>
+        </div>
+        <div class="metric-main">
+          <span>行情資料</span>
+          <strong class="not-available">暫不顯示</strong>
+          <em>第一階段不接即時／延遲行情</em>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="active" data-tab="overview">概況</button>
+        <button data-tab="finance">財務</button>
+        <button data-tab="news">新聞</button>
+        <button data-tab="ai">AI 分析</button>
+      </div>
+
+      <div class="tab-panel active" id="overview">
+        <div class="grid-3">
+          <article class="info-card">
+            <span class="card-icon">🏢</span>
+            <h3>公司資料</h3>
+            <div class="data-row"><span>產業</span><b>半導體</b></div>
+            <div class="data-row"><span>市場</span><b>台灣證券交易所</b></div>
+            <div class="data-row"><span>股票代號</span><b>2330</b></div>
+          </article>
+          <article class="info-card">
+            <span class="card-icon">💰</span>
+            <h3>估值指標</h3>
+            <div class="data-row"><span>本益比</span><b>待合法來源</b></div>
+            <div class="data-row"><span>股價淨值比</span><b>待合法來源</b></div>
+            <div class="data-row"><span>殖利率</span><b>待合法來源</b></div>
+          </article>
+          <article class="info-card">
+            <span class="card-icon">🏦</span>
+            <h3>市場資訊</h3>
+            <div class="data-row"><span>資料狀態</span><b class="status">待接合法來源</b></div>
+            <div class="data-row"><span>最後更新</span><b>來源待接</b></div>
+            <div class="data-row"><span>即時行情</span><b>第一版暫不啟用</b></div>
+          </article>
+        </div>
+      </div>
+
+      <section class="official-data-card" id="officialDataCard" aria-label="官方資料入口">
+        <div class="official-data-head">
+          <div><span class="section-kicker">OFFICIAL DATA</span><h3>官方公司資料</h3><p>先直接連到交易所／公開資訊原始頁面，不在網站內複製未確認授權的資料。</p></div>
+          <span class="official-badge">✓ 原始來源</span>
+        </div>
+        <div class="official-links" id="officialLinks"></div>
+      </section>
+
+      <div class="source-center" id="sourceCenter">
+        <div class="source-center-head">
+          <div><span class="section-kicker">SOURCE CENTER</span><h3>目前研究會使用哪些來源？</h3></div>
+          <span class="source-safe">✓ 優先官方／公開來源</span>
+        </div>
+        <div class="source-grid" id="sourceGrid"></div>
+      </div>
+
+      <div class="tab-panel" id="finance">
+        <div class="finance-grid">
+          <article class="info-card wide" id="monthlyRevenueCard">
+            <div class="card-title-row"><h3>最新月營收</h3><span id="revenueStatus">等待官方資料</span></div>
+            <div id="monthlyRevenueContent" class="empty-data"><strong>正在準備官方月營收資料</strong><p>啟用後端後，這裡會顯示最新一期官方月營收、年增率、月增率與累計營收。</p></div>
+          </article>
+          <article class="info-card">
+            <h3>月營收重點</h3>
+            <div class="big-stat"><strong>當月營收</strong><span id="revenueCurrent">—</span></div>
+            <div class="big-stat"><strong>年增率</strong><span id="revenueYoy">—</span></div>
+            <div class="big-stat"><strong>月增率</strong><span id="revenueMom">—</span></div>
+          </article>
+        </div>
+        <section class="trend-section" id="financialTrendSection" aria-label="財務趨勢圖表">
+          <div class="trend-head">
+            <div><span class="section-kicker">FINANCIAL TRENDS</span><h3>財務趨勢</h3><p>把近幾期官方財務數字轉成容易閱讀的趨勢圖；沒有足夠資料時不自行補值。</p></div>
+            <span class="trend-badge">官方資料驅動</span>
+          </div>
+          <div class="trend-grid">
+            <article class="trend-card"><div class="trend-card-head"><strong>營業收入</strong><span>百萬元</span></div><div class="chart-wrap" id="revenueChart"><div class="chart-empty">等待財務資料</div></div></article>
+            <article class="trend-card"><div class="trend-card-head"><strong>營業利益</strong><span>百萬元</span></div><div class="chart-wrap" id="operatingChart"><div class="chart-empty">等待財務資料</div></div></article>
+            <article class="trend-card"><div class="trend-card-head"><strong>基本 EPS</strong><span>元</span></div><div class="chart-wrap" id="epsChart"><div class="chart-empty">等待財務資料</div></div></article>
+          </div>
+          <div class="trend-note" id="trendNote">圖表僅呈現已取得的官方資料，不代表未來表現，也不構成投資建議。</div>
+        </section>
+
+        <section class="health-section" id="financialHealthSection" aria-label="財務健康指標">
+          <div class="trend-head">
+            <div><span class="section-kicker">FINANCIAL HEALTH</span><h3>財務健康指標</h3><p>只用已取得的官方資產負債表與損益資料計算，不自行填補缺失數字。</p></div>
+            <span class="trend-badge">研究輔助，不是評分</span>
+          </div>
+          <div class="health-grid" id="financialHealthContent">
+            <div class="health-empty">選擇股票後，這裡會整理可計算的財務比率。</div>
+          </div>
+          <div class="trend-note">比率只是資料整理工具，不代表公司好壞或未來股價；計算結果仍應搭配產業特性、財報期間與原始公告判讀。</div>
+        </section>
+
+        <div class="finance-structure-grid">
+          <article class="info-card" id="balanceSheetCard">
+            <div class="card-title-row"><h3>財務結構</h3><span id="balanceStatus">等待官方資料</span></div>
+            <div id="balanceSheetContent" class="empty-data"><strong>正在準備資產負債表</strong><p>啟用後端後，這裡會顯示最新一期資產、負債與權益。</p></div>
+          </article>
+          <article class="info-card" id="cashFlowCard">
+            <div class="card-title-row"><h3>現金流量</h3><span id="cashFlowStatus">等待官方資料</span></div>
+            <div id="cashFlowContent" class="empty-data"><strong>正在準備現金流量表</strong><p>啟用後端後，這裡會整理 MOPS 官方財報的營業、投資、籌資現金流。</p></div>
+          </article>
+        </div>
+        <article class="info-card wide quarterly-card" id="quarterlyFinancialCard">
+          <div class="card-title-row"><h3>近四季損益</h3><span id="financialStatus">等待官方資料</span></div>
+          <div id="quarterlyFinancialContent" class="empty-data"><strong>正在準備官方季財務資料</strong><p>啟用後端後，這裡會顯示官方綜合損益表的近四季資料與 EPS。</p></div>
+        </article>
+        <div class="source-note" id="revenueSourceNote">資料來源：政府資料開放平臺／臺灣證券交易所 OpenAPI。資料為最新一期快照；正式研究請查看原始資料與資料日期。</div>
+      </div>
+
+      <div class="tab-panel" id="news">
+        <div class="news-list" id="newsList">
+          <article class="news-card source-card">
+            <span class="news-date">第一階段</span>
+            <h3>新聞搜尋模組已預留</h3>
+            <p>正式版會先取得新聞標題、日期與原始連結，再交給 AI 做摘要；不直接搬運新聞全文。</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="ai">
+        <article class="ai-card">
+          <div class="ai-head">
+            <div class="ai-orb">✦</div>
+            <div><span>AI INSIGHT</span><h3>近期資訊重點</h3></div>
+          </div>
+          <div class="insight-grid">
+            <div><strong>① 公司</strong><p>正式版將整理公司公告、財務與重要事件。</p></div>
+            <div><strong>② 產業</strong><p>整理產業環境與近期公開消息。</p></div>
+            <div><strong>③ 市場</strong><p>彙整公開市場資訊與法人等資料（以合法來源為前提）。</p></div>
+            <div><strong>④ 風險</strong><p>列出新聞與公開資料中反覆出現、值得留意的因素。</p></div>
+          </div>
+          <div class="source-note">AI 內容僅依可取得的公開資料進行整理與摘要；不代表投資建議，也不保證資料完整、即時或完全正確。</div>
+        </article>
+      </div>
+
+      <section class="ai-assistant" id="aiAssistant">
+        <div class="assistant-head">
+          <div>
+            <span class="section-kicker">AI RESEARCH ASSISTANT</span>
+            <h2>問問 StockAI</h2>
+            <p>先用示範模式跑通「提問 → 整理 → 來源」流程；正式版再由後端接入可使用的資料來源。</p>
+          </div>
+          <span class="assistant-mode">DEMO · 尚未連接 AI API</span>
+        </div>
+        <div class="assistant-layout">
+          <div class="assistant-chat" id="assistantChat" aria-live="polite">
+            <div class="chat-message ai-message">
+              <div class="chat-avatar">✦</div>
+              <div class="chat-bubble">
+                <strong>StockAI</strong>
+                <p>你可以問我「最近有哪些重要消息？」、「最近財務表現如何？」或自己輸入問題。正式版會只根據通過來源檢查的資料回答。</p>
+                <div class="chat-disclaimer">⚠️ AI 內容僅供資訊整理與研究參考，不構成投資建議。</div>
+              </div>
+            </div>
+          </div>
+          <form class="assistant-form" id="assistantForm">
+            <textarea id="assistantInput" rows="3" placeholder="例如：最近有哪些值得留意的公司公告？"></textarea>
+            <div class="assistant-form-bottom">
+              <span>回答會附資料來源與日期</span>
+              <button type="submit">送出問題 ↗</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="ask-ai">
+        <div>
+          <span class="section-kicker">ASK AI</span>
+          <h2>還想知道什麼？</h2>
+          <p>針對目前股票繼續提問，正式版將搜尋最新公開資訊後回答。</p>
+        </div>
+        <div class="question-chips">
+          <button>最近有哪些重要消息？</button>
+          <button>近期市場關注什麼？</button>
+          <button>最近財務表現如何？</button>
+          <button>有哪些值得留意的風險？</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <div><strong>StockAI</strong><span>AI 股票資訊研究助手</span></div>
+    <div class="footer-disclaimer">
+      <strong>投資風險與免責</strong>
+      <p>本網站提供之股票、公司、財務、新聞及 AI 摘要資訊，僅供一般資訊整理與投資研究參考，不構成任何投資建議、買賣推薦、保證獲利或個人化金融建議。資料可能因來源更新時間、技術限制或來源內容變動而不完整、不正確或非最新。使用者應以原始資料及相關主管機關、上市櫃公司正式公告為準，並自行評估投資風險及承擔投資決策結果。</p>
+      <button type="button" id="openDisclaimerFooter">閱讀完整免責條款</button>
+    </div>
+  </footer>
+
+  <div class="modal" id="disclaimerModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-disclaimer></div>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="disclaimerTitle">
+      <button class="modal-close" type="button" data-close-disclaimer aria-label="關閉">×</button>
+      <span class="section-kicker">IMPORTANT NOTICE</span>
+      <h2 id="disclaimerTitle">StockAI 使用條款與免責聲明</h2>
+      <div class="disclaimer-body">
+        <p><strong>1. 資訊性質</strong><br>本網站的內容主要用於整理公開資訊、新聞、公司公告與財務資料，協助使用者進行研究與資訊查找，不構成投資建議、買賣推薦、證券投資顧問服務或其他個人化金融建議。</p>
+        <p><strong>2. AI 內容限制</strong><br>AI 產生的摘要、整理、分類與回答可能存在遺漏、誤讀、計算錯誤或資料更新落差。任何 AI 內容都不應被視為唯一決策依據。</p>
+        <p><strong>3. 資料來源</strong><br>正式版將優先使用可確認來源與公開資料，並盡可能標示資料日期及原始來源連結。涉及即時或延遲行情資料時，必須先確認相關授權與使用條件，不會因資料在網路上可見就視為可自由再散布。</p>
+        <p><strong>4. 投資風險</strong><br>股票及其他金融商品具有市場風險，過去資訊不代表未來結果。使用者應自行查證原始資料、評估自身情況，並自行承擔投資決策及其結果。</p>
+        <p><strong>5. 資料正確性與時效</strong><br>本網站不保證資料一定完整、正確、即時或不中斷。若網站內容與原始公告或正式資料不一致，應以原始資料為準。</p>
+        <p class="legal-note">本頁面為網站產品設計用的資訊提醒，不取代法律、會計、稅務或投資專業意見。</p>
+      </div>
+      <button class="modal-confirm" type="button" data-close-disclaimer>我已閱讀</button>
+    </section>
+  </div>
+
+  <script src="js/source-policy.js"></script>
+  <script src="js/stock-resolver.js"></script>
+  <script src="js/backend-config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

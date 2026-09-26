@@ -1,0 +1,30 @@
+{
+  "twse_trading": {
+    "name": "臺灣證券交易所交易資訊",
+    "role": "行情與交易資訊",
+    "status": "REVIEW_REQUIRED",
+    "display_policy": "第一版不直接公開即時/延遲行情；正式接入前確認授權與費用",
+    "official_url": "https://www.twse.com.tw/"
+  },
+  "mops": {
+    "name": "公開資訊觀測站",
+    "role": "公司基本資料、重大訊息、財務報表、月營收、股利等",
+    "status": "CANDIDATE",
+    "display_policy": "以官方頁面與其使用規範為準；保留原始來源與資料日期",
+    "official_url": "https://mops.twse.com.tw/"
+  },
+  "cna_rss": {
+    "name": "中央社 RSS",
+    "role": "新聞標題、前言、文章連結",
+    "status": "CANDIDATE_WITH_TERMS",
+    "display_policy": "依中央社 RSS 規範：標示出處，不引用全文；以標題/前言/連結為主",
+    "official_url": "https://www.cna.com.tw/about/rss.aspx"
+  },
+  "data_gov": {
+    "name": "政府資料開放平臺",
+    "role": "尋找政府公開資料集",
+    "status": "CANDIDATE",
+    "display_policy": "逐資料集確認授權與使用條款",
+    "official_url": "https://data.gov.tw/"
+  }
+}
