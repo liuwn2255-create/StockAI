@@ -141,11 +141,48 @@ async function runBackendDiagnostics(stock){
     const base=cfg.API_BASE_URL.replace(/\/$/,'');
     const response=await fetch(`${base}/api/diagnostics?symbol=${encodeURIComponent(stock.symbol)}`);
     const data=await response.json();
-    if(!response.ok || !data.ok) throw new Error(data.error||'診斷失敗');
-    const map={'公司資料':'profile','月營收':'revenue','損益表':'financials','資產負債表':'balance','現金流量表':'cashflow','重大訊息':'announcements'};
-    (data.tests||[]).forEach(t=>setResearchStatus(map[t.name],t.ok?'ready':'unavailable',t.ok?`已取得 · ${t.ms}ms`:`不可用 · ${t.ms}ms`));
+    if(!response.ok) throw new Error(data.error||'診斷失敗');
+
+    // 支援目前 Worker 的 checks 格式，也相容舊版 tests 格式。
+    const items = data.checks || data.tests || [];
+    const map={
+      '公司資料':'profile',
+      '月營收':'revenue',
+      '損益':'financials',
+      '損益表':'financials',
+      '資產負債':'balance',
+      '資產負債表':'balance',
+      '現金流':'cashflow',
+      '現金流量表':'cashflow',
+      '重大訊息':'announcements'
+    };
+
+    items.forEach(t=>{
+      const module=map[t.name];
+      if(!module) return;
+      const ok=!!t.ok;
+      const detail=t.message || t.detail || '';
+      setResearchStatus(
+        module,
+        ok ? 'ready' : 'unavailable',
+        ok ? `已取得 · ${t.ms||0}ms` : '官方資料來源暫不可用'
+      );
+    });
+
+    const passed = Number.isFinite(data.passed)
+      ? data.passed
+      : (data.summary?.passed ?? items.filter(t=>t.ok).length);
+    const total = Number.isFinite(data.total)
+      ? data.total
+      : (data.summary?.total ?? items.length);
+    const unavailable = Math.max(total - passed, 0);
+
     const summary=document.getElementById('researchStatusSummary');
-    if(summary) summary.textContent=`診斷完成 · ${data.summary?.passed||0}/${data.summary?.total||0} 通過`;
+    if(summary){
+      summary.textContent = unavailable
+        ? `診斷完成 · 已取得 ${passed}/${total} · ${unavailable} 項暫不可用`
+        : `診斷完成 · ${passed}/${total} 項資料可用`;
+    }
   }catch(err){
     const summary=document.getElementById('researchStatusSummary');
     if(summary) summary.textContent='Worker 無法連線';
