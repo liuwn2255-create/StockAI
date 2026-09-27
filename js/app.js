@@ -274,6 +274,7 @@ async function loadQuarterlyFinancials(stock){
       <a class="source-link" href="${data.evidence?.url || 'https://data.gov.tw/dataset/91998'}" target="_blank" rel="noopener noreferrer">查看官方財務資料 ↗</a>
     `;
   }catch(err){
+    setResearchStatus('financials','unavailable','暫不可用');
     status.textContent = '官方資料暫不可用';
     content.innerHTML = `<strong>目前無法取得季財務資料</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財務資料。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>`;
   }
@@ -387,6 +388,7 @@ async function loadAnnouncements(stock){
     if(!response.ok || !data.ok) throw new Error(data.error || '重大訊息取得失敗');
     const items = data.items || [];
     if(!items.length){
+      setResearchStatus('announcements','unavailable','暫不可用');
       newsList.innerHTML = `<article class="news-card source-card"><span class="news-date">官方資料</span><h3>目前沒有取得可顯示的重大訊息</h3><p>StockAI 不會用其他來源或假資料補上。</p><a href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看公開資訊觀測站 ↗</a></article>`;
       return;
     }
