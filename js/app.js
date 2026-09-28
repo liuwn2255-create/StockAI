@@ -434,21 +434,6 @@ function renderStock(stock){
   loadFinancialHealth(stock);
   loadCashFlow(stock);
   loadAnnouncements(stock);
-
-  newsList.innerHTML = `
-    <article class="news-card source-card">
-      <span class="news-date">新聞模組 · ${stock.symbol}</span>
-      <h3>「${stock.name}」新聞搜尋入口已建立</h3>
-      <p>正式版會搜尋可使用的公開新聞來源，顯示標題、日期、短摘要與原始連結；目前不直接顯示未確認授權的新聞全文。</p>
-      <a href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">先查看公開資訊觀測站 ↗</a>
-    </article>
-    <article class="news-card source-card">
-      <span class="news-date">公司公告</span>
-      <h3>公司重大訊息與財務資料</h3>
-      <p>後端資料適配器會以公司代號 ${stock.symbol} 查找官方公告、月營收及財務資料，再交給 AI 做整理。</p>
-      <a href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>
-    </article>
-  `;
 }
 
 function showSearchMessage(message){
