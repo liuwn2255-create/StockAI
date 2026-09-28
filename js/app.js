@@ -274,6 +274,7 @@ async function loadQuarterlyFinancials(stock){
       <a class="source-link" href="${data.evidence?.url || 'https://data.gov.tw/dataset/91998'}" target="_blank" rel="noopener noreferrer">查看官方財務資料 ↗</a>
     `;
   }catch(err){
+    setResearchStatus('financials','unavailable','暫不可用');
     status.textContent = '官方資料暫不可用';
     content.innerHTML = `<strong>目前無法取得季財務資料</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財務資料。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>`;
   }
@@ -297,7 +298,13 @@ async function loadFinancialHealth(stock){
     if(!finRes.ok || !fin.ok || !balRes.ok || !bal.ok) throw new Error('官方資料不足');
     const f = fin.latest || {};
     const b = bal.latest || {};
-    const n = v => Number(v);
+    const n = v => {
+      if(v === null || v === undefined) return null;
+      if(typeof v === 'number') return Number.isFinite(v) ? v : null;
+      if(typeof v !== 'string' || !v.trim()) return null;
+      const value = Number(v);
+      return Number.isFinite(value) ? value : null;
+    };
     const curA=n(b.currentAssetsThousandNTD), curL=n(b.currentLiabilitiesThousandNTD), liab=n(b.totalLiabilitiesThousandNTD), assets=n(b.totalAssetsThousandNTD), eq=n(b.equityThousandNTD);
     const op=n(f.operatingIncomeThousandNTD), rev=n(f.revenueThousandNTD), net=n(f.netIncomeThousandNTD);
     const ratios=[
@@ -336,6 +343,7 @@ async function loadBalanceSheet(stock){
     <div class="source-meta">期間：${escapeHtml(x.period||'—')} · 資料日期：${escapeHtml(data.evidence?.date||'—')} · 金額原始單位：新臺幣千元</div>
     <a class="source-link" href="${data.evidence?.url||'https://data.gov.tw/'}" target="_blank" rel="noopener noreferrer">查看官方資料 ↗</a>`;
   }catch(err){
+    setResearchStatus('balance','unavailable','官方資料暫不可用');
     status.textContent='官方資料暫不可用';
     content.innerHTML='<strong>目前無法取得資產負債表</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財報。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>';
   }
@@ -372,6 +380,7 @@ async function loadCashFlow(stock){
     status.textContent=`✓ 官方資料 · ${items.length} 期`;
     setResearchStatus('cashflow','ready',`${items.length} 期官方資料`);
   }catch(err){
+    setResearchStatus('cashflow','unavailable','官方資料暫不可用');
     status.textContent='官方資料暫不可用';
     content.innerHTML='<strong>目前無法取得現金流量表</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財報。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>';
   }
@@ -536,6 +545,9 @@ async function askBackend(question){
 }
 
 function liveAnswer(data){
+  const statusBadge = document.getElementById('aiStatusBadge');
+  if(statusBadge && data.mode === 'live') statusBadge.textContent = 'LIVE · AI 已連線';
+  else if(statusBadge && data.mode === 'demo') statusBadge.textContent = 'DEMO · 示範模式';
   const evidence = (data.evidence || []).map(item => `
     <a href="${item.url}" target="_blank" rel="noopener noreferrer"><strong>${item.source}</strong> · ${item.date}</a>
   `).join('');
