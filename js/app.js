@@ -207,16 +207,17 @@ function formatMillion(value){
 function renderTrendChart(id, items, key, unit){
   const el = document.getElementById(id);
   if(!el) return;
-  const rows = (items || []).filter(x => Number.isFinite(Number(x[key])));
+  const rows = (items || []).filter(x => x[key] !== null && x[key] !== undefined && x[key] !== '' && Number.isFinite(Number(x[key])));
   if(rows.length < 2){ el.innerHTML = '<div class="chart-empty">目前資料不足以形成趨勢</div>'; return; }
   const data = rows.slice(-6);
-  const values = data.map(x => Number(x[key]));
+  const divisor = unit === '百萬元' ? 1000 : 1;
+  const values = data.map(x => Number(x[key]) / divisor);
   const min = Math.min(...values), max = Math.max(...values);
   const pad = (max-min) || Math.max(Math.abs(max)*0.08, 1);
   const lo = min - pad*0.12, hi = max + pad*0.12;
   const W=560,H=170,L=12,R=12,T=16,B=30;
   const x=i=>L+(W-L-R)*(i/(data.length-1));
-  const y=v=T+(H-T-B)*(1-(v-lo)/(hi-lo));
+  const y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
   const pts=data.map((d,i)=>[x(i),y(Number(d[key]))]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
   const area=line+' L '+pts[pts.length-1][0].toFixed(1)+' '+(H-B)+' L '+pts[0][0].toFixed(1)+' '+(H-B)+' Z';
@@ -256,7 +257,6 @@ async function loadQuarterlyFinancials(stock){
     if(!items.length) throw new Error('沒有資料');
     status.textContent = `✓ 官方資料 · ${data.evidence?.date || ''}`;
     setResearchStatus('financials','ready','官方資料已取得');
-    renderFinancialTrends(items);
     content.innerHTML = `
       <div class="financial-latest-grid">
         <div class="big-stat"><strong>最新季度</strong><span>${escapeHtml(data.latest?.period || '—')}</span></div>
@@ -277,6 +277,19 @@ async function loadQuarterlyFinancials(stock){
     setResearchStatus('financials','unavailable','暫不可用');
     status.textContent = '官方資料暫不可用';
     content.innerHTML = `<strong>目前無法取得季財務資料</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財務資料。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>`;
+  }
+}
+
+async function loadFinancialTrends(stock){
+  const cfg = window.STOCKAI_CONFIG || {};
+  if(!cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
+  try{
+    const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/trends?symbol=${encodeURIComponent(stock.symbol)}`);
+    const data = await response.json();
+    if(!response.ok || !data.ok) throw new Error(data.error || '財務趨勢資料取得失敗');
+    renderFinancialTrends(data.items || []);
+  }catch(_){
+    renderFinancialTrends([]);
   }
 }
 
@@ -430,6 +443,7 @@ function renderStock(stock){
   loadLiveProfile(stock);
   loadMonthlyRevenue(stock);
   loadQuarterlyFinancials(stock);
+  loadFinancialTrends(stock);
   loadBalanceSheet(stock);
   loadFinancialHealth(stock);
   loadCashFlow(stock);

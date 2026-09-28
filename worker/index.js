@@ -28,10 +28,12 @@ const DISCLAIMER = '本內容僅供公開資訊整理與研究參考，不構成
 
 const TWSE_MONTHLY_REVENUE_API = 'https://openapi.twse.com.tw/v1/opendata/t187ap05_L';
 const TWSE_MATERIAL_ANNOUNCEMENT_API = 'https://openapi.twse.com.tw/v1/opendata/t187ap04_L';
+const MOPS_ANNOUNCEMENT_API = 'https://mopsov.twse.com.tw/mops/web/ajax_t05st01';
 const TWSE_INCOME_STATEMENT_GENERAL_API = 'https://openapi.twse.com.tw/v1/opendata/t187ap06_L_ci';
 const TWSE_BALANCE_SHEET_GENERAL_API = 'https://openapi.twse.com.tw/v1/opendata/t187ap07_L_ci';
+const MOPSFIN_TREND_API = 'https://mopsfin.twse.com.tw/compare/data';
 
-const MOPS_CASH_FLOW_API = 'https://mops.twse.com.tw/mops/web/ajax_t164sb05';
+const MOPS_CASH_FLOW_API = 'https://mopsov.twse.com.tw/mops/web/ajax_t164sb05';
 
 function cleanHtmlText(value) {
   return String(value || '')
@@ -97,13 +99,16 @@ async function fetchMopsCashFlowQuarter(symbol, year, quarter) {
     const body = new URLSearchParams({
       encodeURIComponent: '1',
       step: '1', firstin: '1', off: '1',
-      keyword4: '', code1: '', TYPEK2: '', checkbtn: '',
-      queryName: 'co_id', TYPEK: 'all', isnew: 'false',
+      queryName: 'co_id', inpuType: 'co_id', TYPEK: 'all', isnew: 'false',
       co_id: symbol, year: rocYear(year), season: String(quarter).padStart(2, '0'),
     });
     const response = await fetch(MOPS_CASH_FLOW_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'text/html,application/json' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'text/html,application/xhtml+xml,application/json',
+        'Referer': 'https://mopsov.twse.com.tw/mops/web/t164sb05',
+      },
       body: body.toString(),
       signal: controller.signal,
     });
@@ -173,7 +178,9 @@ async function fetchCashFlow(symbol, limit = 4) {
 }
 
 function numberOrNull(value) {
-  const n = Number(String(value ?? '').replace(/,/g, '').trim());
+  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  if (!normalized) return null;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -248,6 +255,85 @@ function quarterLabel(year, quarter) {
   const q = String(quarter || '').trim().replace(/^第/, '').replace(/季$/, '');
   if (!y && !q) return '';
   return `${y} Q${q}`;
+}
+
+async function fetchHistoricalTrends(symbol) {
+  const metrics = [
+    { key: 'revenueThousandNTD', compareItem: 'Revenue', ylabel: '仟元' },
+    { key: 'operatingIncomeThousandNTD', compareItem: 'OperatingIncome', ylabel: '仟元' },
+    { key: 'eps', compareItem: 'EPS', ylabel: '元' },
+  ];
+  const metricResults = await Promise.all(metrics.map(async metric => {
+    const body = new URLSearchParams({
+      companyId: symbol,
+      compareItem: metric.compareItem,
+      quarter: 'true',
+      ylabel: metric.ylabel,
+      ys: '0',
+      revenue: '',
+      bcodeAvg: 'false',
+      companyAvg: 'false',
+      qnumber: '',
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(MOPSFIN_TREND_API, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Referer': 'https://mopsfin.twse.com.tw/',
+        },
+        body: body.toString(),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Epoint ${metric.compareItem} request failed (HTTP ${response.status})`);
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        throw new Error(`Epoint ${metric.compareItem} returned invalid JSON`);
+      }
+      if (!Array.isArray(payload?.xaxisList) || !Array.isArray(payload?.graphData) || !payload.graphData.length) {
+        throw new Error(`Epoint ${metric.compareItem} returned an unexpected data format`);
+      }
+      const points = payload.graphData.find(series => Array.isArray(series?.data))?.data;
+      if (!Array.isArray(points)) throw new Error(`Epoint ${metric.compareItem} has no trend data`);
+      const values = new Map();
+      for (const point of points) {
+        if (!Array.isArray(point) || !Number.isInteger(Number(point[0]))) continue;
+        const periodIndex = Number(point[0]);
+        const label = String(payload.xaxisList[periodIndex] ?? '').trim();
+        const periodMatch = label.match(/^(\d{4})\s*Q([1-4])$/i);
+        if (!periodMatch || point[1] === null || point[1] === undefined || String(point[1]).trim() === '') continue;
+        const value = Number(point[1]);
+        if (!Number.isFinite(value)) continue;
+        values.set(`${periodMatch[1]} Q${periodMatch[2]}`, value);
+      }
+      if (!values.size) throw new Error(`Epoint ${metric.compareItem} returned no quarterly values`);
+      return { key: metric.key, values };
+    } finally {
+      clearTimeout(timer);
+    }
+  }));
+
+  const byPeriod = new Map();
+  for (const { key, values } of metricResults) {
+    for (const [period, value] of values) {
+      const item = byPeriod.get(period) || { period };
+      item[key] = value;
+      byPeriod.set(period, item);
+    }
+  }
+  const items = [...byPeriod.values()]
+    .sort((a, b) => {
+      const [aYear, aQuarter] = a.period.match(/^(\d{4}) Q([1-4])$/).slice(1).map(Number);
+      const [bYear, bQuarter] = b.period.match(/^(\d{4}) Q([1-4])$/).slice(1).map(Number);
+      return aYear - bYear || aQuarter - bQuarter;
+    })
+    .slice(-4);
+  return { items };
 }
 
 function normalizeIncomeStatement(row) {
@@ -329,9 +415,9 @@ function normalizeBalanceSheet(row) {
     name: get('公司名稱', '公司簡稱'),
     reportDate: rocDateToISO(get('出表日期')),
     year, quarter, period: quarterLabel(year, quarter),
-    currentAssetsThousandNTD: numberOrNull(get('流動資產合計', '流動資產總額')),
+    currentAssetsThousandNTD: numberOrNull(get('流動資產', '流動資產合計', '流動資產總額')),
     totalAssetsThousandNTD: numberOrNull(get('資產總計')),
-    currentLiabilitiesThousandNTD: numberOrNull(get('流動負債合計', '流動負債總額')),
+    currentLiabilitiesThousandNTD: numberOrNull(get('流動負債', '流動負債合計', '流動負債總額')),
     totalLiabilitiesThousandNTD: numberOrNull(get('負債總計')),
     equityThousandNTD: numberOrNull(get('權益總計')),
     bookValuePerShare: numberOrNull(get('每股參考淨值')),
@@ -395,30 +481,223 @@ function normalizeAnnouncement(row) {
   };
 }
 
-async function fetchMaterialAnnouncements(symbol, limit = 8) {
+function parseMopsAnnouncementRows(html) {
+  const rows = [];
+  const tables = String(html || '').match(/<table\b[\s\S]*?<\/table>/gi) || [];
+  for (const table of tables) {
+    const trMatches = table.match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+    const headerRow = trMatches.find(tr => /<th\b/i.test(tr));
+    if (!headerRow) continue;
+    const headers = [...headerRow.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi)]
+      .map(match => cleanHtmlText(match[1]));
+    if (!headers.includes('發言日期') || !headers.includes('發言時間') || !headers.includes('主旨')) continue;
+    for (const tr of trMatches) {
+      if (tr === headerRow) continue;
+      const cells = [...tr.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)]
+        .map(match => cleanHtmlText(match[1]));
+      if (cells.length < headers.length - 1) continue;
+      const fields = Object.fromEntries(headers.map((header, index) => [header, cells[index] || '']));
+      rows.push({ fields, rowHtml: tr });
+    }
+  }
+  return rows;
+}
+
+function announcementDetailUrl(symbol, year, row) {
+  const raw = String(row || '');
+  const getAttr = (name) => {
+    const re = new RegExp(name + "(?:\\.value)?\\s*=\\s*['\\\"]([^'\\\"]+)['\\\"]", 'i');
+    return raw.match(re)?.[1] || '';
+  };
+  const spokeDate = getAttr('spoke_date');
+  const spokeTime = getAttr('spoke_time');
+  const seqNo = getAttr('seq_no');
+  const typek = getAttr('TYPEK') || 'sii';
+  if (!spokeDate || !spokeTime || !seqNo) return 'https://mops.twse.com.tw/mops/web/t05st01';
+  const params = new URLSearchParams({
+    encodeURIComponent: '1', firstin: 'true', b_date: '', e_date: '', TYPEK: typek,
+    year: String(year), month: 'all', type: '', co_id: symbol,
+    spoke_date: spokeDate, spoke_time: spokeTime, e_month: 'all', step: '2', off: '1', seq_no: seqNo,
+  });
+  return `${MOPS_ANNOUNCEMENT_API}?${params.toString()}`;
+}
+
+function normalizeHistoricalAnnouncement(fields, symbol, year, rowHtml) {
+  const dateRaw = String(fields['發言日期'] || '').replace(/\//g, '').trim();
+  const timeRaw = String(fields['發言時間'] || '').trim();
+  const subject = String(fields['主旨'] || '').trim();
+  if (!dateRaw && !subject) return null;
+  return {
+    symbol,
+    name: fields['公司名稱'] || '',
+    date: rocDateToISO(dateRaw),
+    time: timeRaw,
+    subject,
+    article: '',
+    eventDate: '',
+    spokesperson: '',
+    title: subject || '公司重大訊息',
+    description: '',
+    id: `mops-announcement-${symbol}-${dateRaw}-${timeRaw}-${encodeURIComponent(subject).slice(0, 24)}`,
+    source: '公開資訊觀測站 MOPS',
+    url: announcementDetailUrl(symbol, year, rowHtml),
+    policy: 'OFFICIAL_PUBLIC_DATA',
+    mopsYear: year,
+    mopsRowHtml: rowHtml,
+  };
+}
+
+function parseMopsAnnouncementDetail(html) {
+  const fields = {};
+  const rows = String(html || '').match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+  for (const row of rows) {
+    const cells = [...row.matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi)]
+      .map(match => ({
+        header: /class\s*=\s*['\"][^'\"]*tblHead/i.test(match[2]),
+        text: cleanHtmlText(match[3]),
+      }));
+    for (let index = 0; index < cells.length - 1; index++) {
+      if (cells[index].header) fields[cells[index].text] = cells[index + 1].text;
+    }
+  }
+  return fields;
+}
+
+async function enrichHistoricalAnnouncement(item) {
+  const { mopsYear, mopsRowHtml, ...publicItem } = item;
+  if (!mopsRowHtml || publicItem.url === 'https://mops.twse.com.tw/mops/web/t05st01') return publicItem;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(TWSE_MATERIAL_ANNOUNCEMENT_API, {
-      headers: { 'Accept': 'application/json' },
+    const response = await fetch(publicItem.url, {
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml',
+        'Referer': 'https://mops.twse.com.tw/mops/web/t05st01',
+        'User-Agent': 'Mozilla/5.0 StockAI/1.0',
+      },
       signal: controller.signal,
-      cf: { cacheTtl: 600, cacheEverything: true },
+      cf: { cacheTtl: 3600, cacheEverything: true },
     });
-    if (!response.ok) throw new Error(`TWSE material announcement ${response.status}`);
-    const rows = await response.json();
-    if (!Array.isArray(rows)) throw new Error('TWSE material announcement returned unexpected format');
-    const items = rows
-      .filter(row => String(row?.['公司代號'] || row?.['公司代碼'] || '').trim() === symbol)
-      .map(normalizeAnnouncement)
-      .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
-      .slice(0, limit)
-      .map((item, index) => ({
-        ...item,
-        id: `twse-announcement-${symbol}-${index}`,
-        source: '臺灣證券交易所 OpenAPI／公開資訊觀測站',
-        url: 'https://mops.twse.com.tw/',
-        policy: 'OFFICIAL_PUBLIC_DATA',
-      }));
+    if (!response.ok) return publicItem;
+    const details = parseMopsAnnouncementDetail(await response.text());
+    const title = details['主旨'] || publicItem.title;
+    return {
+      ...publicItem,
+      date: details['發言日期'] ? rocDateToISO(details['發言日期'].replace(/\D/g, '')) : publicItem.date,
+      time: details['發言時間'] || publicItem.time,
+      title,
+      subject: title,
+      description: details['說明'] || '',
+      spokesperson: details['發言人'] || '',
+    };
+  } catch (_) {
+    return publicItem;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchMopsHistoricalAnnouncements(symbol, limit = 8) {
+  const now = new Date();
+  const years = [now.getUTCFullYear(), now.getUTCFullYear() - 1];
+  const collected = [];
+  for (const year of years) {
+    const roc = rocYear(year);
+    const url = new URL(MOPS_ANNOUNCEMENT_API);
+    url.searchParams.set('encodeURIComponent', '1');
+    url.searchParams.set('firstin', 'true');
+    url.searchParams.set('b_date', '');
+    url.searchParams.set('e_date', '');
+    url.searchParams.set('TYPEK', 'all');
+    url.searchParams.set('year', roc);
+    url.searchParams.set('month', 'all');
+    url.searchParams.set('type', '');
+    url.searchParams.set('co_id', symbol);
+    url.searchParams.set('e_month', 'all');
+    url.searchParams.set('step', '1');
+    url.searchParams.set('off', '1');
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml',
+          'Referer': 'https://mops.twse.com.tw/mops/web/t05st01',
+          'User-Agent': 'Mozilla/5.0 StockAI/1.0',
+        },
+        signal: controller.signal,
+        cf: { cacheTtl: 900, cacheEverything: true },
+      });
+      if (!response.ok) continue;
+      const html = await response.text();
+      for (const { fields, rowHtml } of parseMopsAnnouncementRows(html)) {
+        const item = normalizeHistoricalAnnouncement(fields, symbol, year, rowHtml);
+        if (item && item.subject) collected.push(item);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    if (collected.length >= limit) break;
+  }
+
+  const seen = new Set();
+  const selected = collected
+    .filter(item => {
+      const key = `${item.date}|${item.time}|${item.subject}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+    .slice(0, limit);
+  return Promise.all(selected.map(enrichHistoricalAnnouncement));
+}
+
+async function fetchMaterialAnnouncements(symbol, limit = 8) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    let items = [];
+    try {
+      const response = await fetch(TWSE_MATERIAL_ANNOUNCEMENT_API, {
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
+        cf: { cacheTtl: 600, cacheEverything: true },
+      });
+      if (response.ok) {
+        const rows = await response.json();
+        if (Array.isArray(rows)) {
+          items = rows
+            .filter(row => String(row?.['公司代號'] || row?.['公司代碼'] || '').trim() === symbol)
+            .map(normalizeAnnouncement)
+            .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+            .slice(0, limit)
+            .map((item, index) => ({
+              ...item,
+              id: `twse-announcement-${symbol}-${index}`,
+              source: '臺灣證券交易所 OpenAPI／公開資訊觀測站',
+              url: 'https://mops.twse.com.tw/mops/web/t05st01',
+              policy: 'OFFICIAL_PUBLIC_DATA',
+            }));
+        }
+      }
+    } catch (_) {}
+
+    // t187ap04_L is a daily market-wide feed. On weekends/holidays it can be empty.
+    // Fall back to MOPS historical announcements so the StockAI card remains useful.
+    if (items.length < limit) {
+      const historical = await fetchMopsHistoricalAnnouncements(symbol, limit);
+      const merged = [...items, ...historical];
+      const seen = new Set();
+      items = merged.filter(item => {
+        const key = `${item.date}|${item.time}|${item.title || item.subject}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`)).slice(0, limit);
+    }
+
     return {
       items,
       evidence: items.map(item => ({
@@ -427,7 +706,7 @@ async function fetchMaterialAnnouncements(symbol, limit = 8) {
         date: item.date || new Date().toISOString().slice(0, 10),
         title: item.title,
         url: item.url,
-        note: '上市公司每日重大訊息公開資料；原始公告請回到公開資訊觀測站查閱。',
+        note: '上市公司重大訊息；當日資料優先使用 TWSE OpenAPI，若當日無資料則補充 MOPS 歷史重大訊息。',
         policy: item.policy,
       })),
     };
@@ -435,7 +714,6 @@ async function fetchMaterialAnnouncements(symbol, limit = 8) {
     clearTimeout(timer);
   }
 }
-
 function corsHeaders(origin) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -468,11 +746,16 @@ function normalizeProfile(row) {
     return '';
   };
 
+  const symbol = get('公司代號', '公司代碼', 'SecuritiesCompanyCode');
+  const industryValue = get('產業別', 'Industry');
+  const industry = /^\d+$/.test(industryValue)
+    ? (STOCKS[symbol]?.industry || industryValue)
+    : industryValue;
   return {
-    symbol: get('公司代號', '公司代碼', 'SecuritiesCompanyCode'),
+    symbol,
     name: get('公司簡稱', '公司名稱', 'CompanyAbbreviation'),
     fullName: get('公司名稱', 'CompanyName'),
-    industry: get('產業別', 'Industry'),
+    industry,
     address: get('住址', '公司地址', 'Address'),
     chairman: get('董事長', 'Chairman'),
     generalManager: get('總經理', 'GeneralManager'),
@@ -553,10 +836,78 @@ async function getStockProfile(stock, env) {
 }
 
 function systemPrompt() {
-  return `你是 StockAI 的資訊研究助手。\n你的任務是整理已提供的公開資料，不是提供投資建議。\n規則：\n1. 只能根據輸入的 evidence 回答，不可自行捏造數字、日期、新聞或公司事件。\n2. 找不到足夠資料時，明確說明資料不足。\n3. 重要事實要附 evidence id。\n4. 區分公司正式公告、財務資料與媒體報導。\n5. 不提供買進、賣出、目標價、持有比例或獲利保證。\n6. 不使用未經授權的即時或延遲 TWSE 行情資料。\n7. 回答使用繁體中文。\n8. 回答最後必須保留：${DISCLAIMER}`;
+  return `你是 StockAI 的資訊研究助手。\n你的任務是整理已提供的公開資料，不是提供投資建議。\n規則：\n1. 只能根據輸入的 evidence 與 financialData 回答，不可自行捏造數字、日期、新聞或公司事件。\n2. 找不到足夠資料時，明確說明資料不足。\n3. 重要事實要附 evidence id。\n4. 區分公司正式公告、財務資料與媒體報導。\n5. 不提供買進、賣出、目標價、持有比例或獲利保證。\n6. 不使用未經授權的即時或延遲 TWSE 行情資料。\n7. 回答使用繁體中文。\n8. 回答最後必須保留：${DISCLAIMER}`;
 }
 
-async function callAI(question, stock, evidence, env) {
+function compactFinancialRecord(item, fields) {
+  if (!item) return null;
+  return {
+    period: item.period || null,
+    ...Object.fromEntries(fields.map(([key, source]) => [key, numberOrNull(item[source])])),
+  };
+}
+
+function buildFinancialData(revenueResult, financialResult, balanceResult, cashResult) {
+  const revenueFields = [
+    ['currentRevenueThousandNTD', 'currentRevenueThousandNTD'],
+    ['previousRevenueThousandNTD', 'previousRevenueThousandNTD'],
+    ['yearAgoRevenueThousandNTD', 'yearAgoRevenueThousandNTD'],
+    ['momPercent', 'momPercent'],
+    ['yoyPercent', 'yoyPercent'],
+    ['cumulativeRevenueThousandNTD', 'cumulativeRevenueThousandNTD'],
+  ];
+  const incomeFields = [
+    ['revenueThousandNTD', 'revenueThousandNTD'],
+    ['grossProfitThousandNTD', 'grossProfitThousandNTD'],
+    ['operatingIncomeThousandNTD', 'operatingIncomeThousandNTD'],
+    ['pretaxIncomeThousandNTD', 'pretaxIncomeThousandNTD'],
+    ['netIncomeThousandNTD', 'netIncomeThousandNTD'],
+    ['parentNetIncomeThousandNTD', 'parentNetIncomeThousandNTD'],
+    ['eps', 'eps'],
+  ];
+  const balanceFields = [
+    ['currentAssetsThousandNTD', 'currentAssetsThousandNTD'],
+    ['totalAssetsThousandNTD', 'totalAssetsThousandNTD'],
+    ['currentLiabilitiesThousandNTD', 'currentLiabilitiesThousandNTD'],
+    ['totalLiabilitiesThousandNTD', 'totalLiabilitiesThousandNTD'],
+    ['equityThousandNTD', 'equityThousandNTD'],
+  ];
+  const cashFields = [
+    ['operatingCashFlowThousandNTD', 'operatingCashFlowThousandNTD'],
+    ['investingCashFlowThousandNTD', 'investingCashFlowThousandNTD'],
+    ['financingCashFlowThousandNTD', 'financingCashFlowThousandNTD'],
+    ['netCashChangeThousandNTD', 'netCashChangeThousandNTD'],
+    ['endingCashThousandNTD', 'endingCashThousandNTD'],
+  ];
+  const monthlyRevenue = revenueResult?.revenue || null;
+  const incomeItems = financialResult?.items || [];
+  const balanceItems = balanceResult?.items || [];
+  const cashItems = cashResult?.items || [];
+  const latestBalance = balanceResult?.latest || balanceItems[0] || null;
+  const currentAssets = numberOrNull(latestBalance?.currentAssetsThousandNTD);
+  const currentLiabilities = numberOrNull(latestBalance?.currentLiabilitiesThousandNTD);
+
+  return {
+    monthlyRevenue: compactFinancialRecord(monthlyRevenue, revenueFields),
+    incomeStatement: {
+      latest: compactFinancialRecord(financialResult?.latest || incomeItems[0], incomeFields),
+      items: incomeItems.map(item => compactFinancialRecord(item, incomeFields)),
+    },
+    balanceSheet: {
+      latest: compactFinancialRecord(latestBalance, balanceFields),
+      items: balanceItems.map(item => compactFinancialRecord(item, balanceFields)),
+      currentRatio: currentAssets !== null && currentLiabilities !== null && currentLiabilities !== 0
+        ? currentAssets / currentLiabilities
+        : null,
+    },
+    cashFlow: {
+      latest: compactFinancialRecord(cashResult?.latest || cashItems[0], cashFields),
+      items: cashItems.map(item => compactFinancialRecord(item, cashFields)),
+    },
+  };
+}
+
+async function callAI(question, stock, evidence, financialData, env) {
   if (!env.AI_API_KEY || !env.AI_API_URL) {
     return {
       mode: 'demo',
@@ -569,7 +920,7 @@ async function callAI(question, stock, evidence, env) {
     model: env.AI_MODEL || 'gpt-5.6-luna',
     input: [
       { role: 'system', content: systemPrompt() },
-      { role: 'user', content: JSON.stringify({ stock, question, evidence }) },
+      { role: 'user', content: JSON.stringify({ stock, question, evidence, financialData }) },
     ],
   };
 
@@ -593,7 +944,7 @@ export default {
 
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') {
-      return json({ ok: true, service: 'StockAI Worker', version: '4.0.0', aiConfigured: Boolean(env.AI_API_KEY && env.AI_API_URL), profileAdapter: 'TWSE OpenAPI / data.gov.tw', announcementAdapter: 'TWSE OpenAPI t187ap04_L', financialAdapter: 'TWSE OpenAPI t187ap06_L_ci' }, 200, origin);
+      return json({ ok: true, service: 'StockAI Worker', version: '4.1.2', aiConfigured: Boolean(env.AI_API_KEY && env.AI_API_URL), profileAdapter: 'TWSE OpenAPI / data.gov.tw', announcementAdapter: 'TWSE OpenAPI t187ap04_L', financialAdapter: 'TWSE OpenAPI t187ap06_L_ci' }, 200, origin);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/monthly-revenue') {
@@ -653,6 +1004,20 @@ export default {
       }
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/trends') {
+      const symbol = String(url.searchParams.get('symbol') || '').trim();
+      const stock = resolveStock(symbol);
+      if (!stock) return json({ ok: false, error: '目前無法識別這支股票。' }, 400, origin);
+      if (stock.market === 'ETF') return json({ ok: false, error: '歷史季度財務趨勢資料僅適用上市公司，不適用 ETF。' }, 400, origin);
+      try {
+        const result = await fetchHistoricalTrends(stock.symbol);
+        if (!result.items.length) return json({ ok: false, error: '目前找不到這支股票的歷史季度趨勢資料。' }, 404, origin);
+        return json({ ok: true, symbol: stock.symbol, source: 'mopsfin.twse.com.tw', items: result.items }, 200, origin);
+      } catch (err) {
+        return json({ ok: false, error: `歷史季度趨勢資料暫時無法取得：${String(err?.message || err).slice(0, 240)}` }, 502, origin);
+      }
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/balance-sheet') {
       const symbol = String(url.searchParams.get('symbol') || '').trim();
       const stock = resolveStock(symbol);
@@ -687,7 +1052,10 @@ export default {
         jobs.push(
           runTest('月營收', async () => (await fetchMonthlyRevenue(stock.symbol))?.revenue),
           runTest('損益表', async () => (await fetchQuarterlyFinancials(stock.symbol, 1))?.items?.length),
-          runTest('資產負債表', async () => (await fetchBalanceSheet(stock.symbol))?.balance),
+          runTest('資產負債表', async () => {
+            const result = await fetchBalanceSheet(stock.symbol);
+            return result?.items?.length > 0 && !!result.latest;
+          }),
           runTest('現金流量表', async () => (await fetchCashFlow(stock.symbol, 1))?.latest),
           runTest('重大訊息', async () => (await fetchMaterialAnnouncements(stock.symbol, 1))?.items?.length),
         );
@@ -728,8 +1096,12 @@ export default {
 
       const profileResult = await getStockProfile(stock, env);
       const evidence = [profileResult.evidence];
+      let revenueResult = null;
+      let financialResult = null;
+      let balanceResult = null;
+      let cashResult = null;
       try {
-        const revenueResult = await fetchMonthlyRevenue(stock.symbol);
+        revenueResult = await fetchMonthlyRevenue(stock.symbol);
         if (revenueResult) evidence.push(revenueResult.evidence);
       } catch (_) { /* keep research usable when optional revenue source is unavailable */ }
       try {
@@ -737,18 +1109,19 @@ export default {
         evidence.push(...announcementResult.evidence);
       } catch (_) { /* keep research usable when optional announcements source is unavailable */ }
       try {
-        const financialResult = await fetchQuarterlyFinancials(stock.symbol, 4);
+        financialResult = await fetchQuarterlyFinancials(stock.symbol, 4);
         if (financialResult) evidence.push(financialResult.evidence);
       } catch (_) { /* keep research usable when optional financial source is unavailable */ }
       try {
-        const balanceResult = await fetchBalanceSheet(stock.symbol);
+        balanceResult = await fetchBalanceSheet(stock.symbol);
         if (balanceResult) evidence.push(balanceResult.evidence);
       } catch (_) { /* keep research usable when optional balance source is unavailable */ }
       try {
-        const cashResult = await fetchCashFlow(stock.symbol, 4);
+        cashResult = await fetchCashFlow(stock.symbol, 4);
         if (cashResult) evidence.push(cashResult.evidence);
       } catch (_) { /* keep research usable when optional cash-flow source is unavailable */ }
-      const result = await callAI(question, stock, evidence, env);
+      const financialData = buildFinancialData(revenueResult, financialResult, balanceResult, cashResult);
+      const result = await callAI(question, stock, evidence, financialData, env);
 
       return json({
         ok: true,
