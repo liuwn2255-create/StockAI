@@ -220,7 +220,7 @@ function renderTrendChart(id, items, key, unit){
   const W=560,H=170,L=12,R=12,T=16,B=30;
   const x=i=>L+(W-L-R)*(i/(data.length-1));
   const y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
-  const pts=data.map((d,i)=>[x(i),y(Number(d[key]))]);
+  const pts=data.map((d,i)=>[x(i),y(values[i])]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
   const area=line+' L '+pts[pts.length-1][0].toFixed(1)+' '+(H-B)+' L '+pts[0][0].toFixed(1)+' '+(H-B)+' Z';
   const grids=[0,0.5,1].map(t=>{const gy=T+(H-T-B)*t;return `<line class="chart-grid-line" x1="${L}" y1="${gy}" x2="${W-R}" y2="${gy}"/>`;}).join('');
@@ -489,7 +489,6 @@ function searchStock(value){
     return;
   }
   renderStock(stock);
-  research.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 form.addEventListener('submit', e => { e.preventDefault(); searchStock(input.value); });
