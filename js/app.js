@@ -12,6 +12,7 @@ const resultFullName = document.getElementById('resultFullName');
 const sourceGrid = document.getElementById('sourceGrid');
 const newsList = document.getElementById('newsList');
 const officialLinks = document.getElementById('officialLinks');
+const aiSummaryRequests = new Map();
 
 let currentStock = resolveStock('2330');
 
@@ -448,6 +449,7 @@ function renderStock(stock){
   loadFinancialHealth(stock);
   loadCashFlow(stock);
   loadAnnouncements(stock);
+  loadAiSummary(stock);
 }
 
 function showSearchMessage(message){
@@ -530,17 +532,63 @@ function demoAnswer(question){
   return `<p>${focus}</p><div class="evidence-box"><strong>資料來源規則</strong><span>MOPS／官方公開資料優先</span><span>每項回答標示資料日期與原始連結</span><span>未確認授權的行情資料不直接顯示</span></div><div class="chat-disclaimer">⚠️ 免責聲明：本內容僅供公開資訊整理與研究參考，不構成投資建議、買賣推薦或任何獲利保證；正式版仍應以原始資料及公司正式公告為準。</div>`;
 }
 
-async function askBackend(question){
+async function askBackend(question, stock = currentStock){
   const cfg = window.STOCKAI_CONFIG || {};
   if(!cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return null;
   const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/, '')}/api/research`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({stock: currentStock.symbol, question})
+    body: JSON.stringify({stock: stock.symbol, question})
   });
   const data = await response.json();
   if(!response.ok || !data.ok) throw new Error(data.error || '後端沒有回傳成功結果');
   return data;
+}
+
+async function loadAiSummary(stock){
+  const content = document.getElementById('aiSummaryContent');
+  const card = document.getElementById('aiSummaryCard');
+  if(!content || !stock?.symbol) return;
+
+  const symbol = String(stock.symbol);
+  let entry = aiSummaryRequests.get(symbol);
+  if(entry?.data){
+    if(currentStock.symbol === symbol){
+      content.innerHTML = liveAnswer(entry.data);
+      card?.setAttribute('aria-busy', 'false');
+    }
+    return;
+  }
+  if(entry?.promise) return entry.promise;
+
+  if(!entry){
+    entry = {data: null, promise: null};
+    aiSummaryRequests.set(symbol, entry);
+  }
+  content.innerHTML = '<p>正在整理個股 AI 分析摘要…</p>';
+  card?.setAttribute('aria-busy', 'true');
+
+  entry.promise = (async () => {
+    try{
+      const question = '請根據目前取得的公開資料，摘要整理這家公司近期的財務表現、營運重點與主要風險；引用可取得的關鍵數字及資料期間，若資料不足請明確說明。';
+      const data = await askBackend(question, stock);
+      if(!data) throw new Error('AI 後端目前無法使用。');
+      entry.data = data;
+      if(currentStock.symbol === symbol){
+        content.innerHTML = liveAnswer(data);
+        card?.setAttribute('aria-busy', 'false');
+      }
+    }catch(_err){
+      aiSummaryRequests.delete(symbol);
+      if(currentStock.symbol === symbol){
+        content.innerHTML = '<p>目前無法取得 AI 個股摘要，請稍後再試。下方互動式 AI 助手仍可繼續使用。</p>';
+        card?.setAttribute('aria-busy', 'false');
+      }
+    }finally{
+      entry.promise = null;
+    }
+  })();
+  return entry.promise;
 }
 
 function liveAnswer(data){
