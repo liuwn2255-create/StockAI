@@ -488,6 +488,9 @@ function searchStock(value){
     showSearchMessage(`目前前端識別器找不到「${v}」。完整股票名單將由後端資料來源補上。`);
     return;
   }
+  if(currentStock?.symbol !== stock.symbol){
+    Array.from(assistantChat.children).slice(1).forEach(message => message.remove());
+  }
   renderStock(stock);
 }
 
@@ -627,6 +630,8 @@ assistantForm?.addEventListener('submit', async e => {
   e.preventDefault();
   const q = assistantInput.value.trim();
   if(!q) return;
+  const requestStock = currentStock;
+  const requestSymbol = requestStock.symbol;
   addChatMessage('user', escapeHtml(q));
   assistantInput.value = '';
   const loading = document.createElement('div');
@@ -635,12 +640,14 @@ assistantForm?.addEventListener('submit', async e => {
   assistantChat.appendChild(loading);
   assistantChat.scrollTop = assistantChat.scrollHeight;
   try {
-    const data = await askBackend(q);
+    const data = await askBackend(q, requestStock);
     loading.remove();
+    if(requestSymbol !== currentStock.symbol) return;
     if(data) addChatMessage('ai', liveAnswer(data));
     else addChatMessage('ai', demoAnswer(q));
   } catch(err){
     loading.remove();
+    if(requestSymbol !== currentStock.symbol) return;
     addChatMessage('ai', `<p>目前無法連線到 StockAI 後端。這次沒有假裝成真正的 AI 回答。</p><div class="evidence-box"><strong>狀態</strong><span>請確認 Cloudflare Worker URL 與部署設定</span></div><div class="chat-disclaimer">⚠️ 免責聲明：${escapeHtml('本內容僅供公開資訊整理與研究參考，不構成投資建議、買賣推薦或任何獲利保證。')}</div>`);
   }
 });
