@@ -16,6 +16,11 @@ const aiSummaryRequests = new Map();
 
 let currentStock = resolveStock('2330');
 let financialTrendRequestId = 0;
+let stockDataRequestId = 0;
+
+function isCurrentStockDataRequest(stock, requestId){
+  return requestId === stockDataRequestId && String(currentStock?.symbol || '') === String(stock?.symbol || '');
+}
 
 function setActiveTab(id){
   tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === id));
@@ -51,6 +56,9 @@ function renderOfficialData(stock){
 }
 
 async function loadMonthlyRevenue(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('revenue', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   const content = document.getElementById('monthlyRevenueContent');
@@ -61,9 +69,16 @@ async function loadMonthlyRevenue(stock){
   const note = document.getElementById('revenueSourceNote');
   if(!content || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
   status.textContent = '讀取中…';
+  content.innerHTML = '<strong>正在取得月營收…</strong><p>請稍候。</p>';
+  if(current) current.textContent = '—';
+  if(yoy) yoy.textContent = '—';
+  if(mom) mom.textContent = '—';
+  if(note) note.textContent = '正在取得官方資料…';
   try{
     const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/monthly-revenue?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data = await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error || '月營收取得失敗');
     const r = data.revenue || {};
     const money = n => n == null ? '—' : `${(Number(n)/1000).toLocaleString('zh-TW',{maximumFractionDigits:0})} 百萬元`;
@@ -76,6 +91,7 @@ async function loadMonthlyRevenue(stock){
     setResearchStatus('revenue','ready','官方資料已取得');
     if(note) note.textContent = `來源：${data.evidence?.source || '臺灣證券交易所 OpenAPI'} · 資料日期：${data.evidence?.date || '—'} · 單位：新臺幣千元`;
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('revenue','unavailable','暫不可用');
     status.textContent = '官方資料暫不可用';
     content.innerHTML = '<strong>目前無法取得最新月營收</strong><p>StockAI 不會用假數字補上；請稍後再試或直接查看原始官方資料。</p>';
@@ -83,17 +99,29 @@ async function loadMonthlyRevenue(stock){
 }
 
 async function loadLiveProfile(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('profile', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   if(!cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
+  const industryEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(1) b');
+  const marketEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(2) b');
+  const codeEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(3) b');
+  if(industryEl) industryEl.textContent = stock.industry || '—';
+  if(marketEl) marketEl.textContent = stock.market === 'ETF' ? 'ETF' : '臺灣證券交易所';
+  if(codeEl) codeEl.textContent = stock.symbol;
+  dataBadge.textContent = '公司資料讀取中…';
+  dataBadge.classList.remove('ready');
+  const note = document.querySelector('#officialDataCard .official-data-head p');
+  if(note) note.textContent = '正在取得官方公司資料…';
   try{
     const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/stock-profile?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data = await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error || '公司資料取得失敗');
     const p = data.profile || {};
-    const industryEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(1) b');
-    const marketEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(2) b');
-    const codeEl = document.querySelector('#overview .info-card:nth-child(1) .data-row:nth-of-type(3) b');
     if(industryEl && p.industry) industryEl.textContent = p.industry;
     if(marketEl && p.symbol) marketEl.textContent = stock.market === 'ETF' ? 'ETF' : '臺灣證券交易所';
     if(codeEl && p.symbol) codeEl.textContent = p.symbol;
@@ -106,6 +134,7 @@ async function loadLiveProfile(stock){
     const note = document.querySelector('#officialDataCard .official-data-head p');
     if(note && data.evidence?.date) note.textContent = `來源：${data.evidence.source} · 資料日期：${data.evidence.date}`;
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('profile','unavailable','暫不可用');
     dataBadge.textContent = '識別成功 · 後端資料待確認';
   }
@@ -252,15 +281,21 @@ function formatNumber(value, digits=2){
 }
 
 async function loadQuarterlyFinancials(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('financials', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   const content = document.getElementById('quarterlyFinancialContent');
   const status = document.getElementById('financialStatus');
   if(!content || !status || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
   status.textContent = '讀取中…';
+  content.innerHTML = '<strong>正在取得最新季財務資料…</strong><p>請稍候。</p>';
   try{
     const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/financials?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data = await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error || '財務資料取得失敗');
     const items = data.items || [];
     if(!items.length) throw new Error('沒有資料');
@@ -283,6 +318,7 @@ async function loadQuarterlyFinancials(stock){
       <a class="source-link" href="${data.evidence?.url || 'https://data.gov.tw/dataset/91998'}" target="_blank" rel="noopener noreferrer">查看官方財務資料 ↗</a>
     `;
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('financials','unavailable','暫不可用');
     status.textContent = '官方資料暫不可用';
     content.innerHTML = `<strong>目前無法取得季財務資料</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財務資料。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>`;
@@ -314,6 +350,9 @@ async function loadFinancialTrends(stock){
 
 
 async function loadFinancialHealth(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   const cfg = window.STOCKAI_CONFIG || {};
   const el = document.getElementById('financialHealthContent');
   if(!el || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
@@ -324,8 +363,10 @@ async function loadFinancialHealth(stock){
       fetch(`${base}/api/financials?symbol=${encodeURIComponent(stock.symbol)}`),
       fetch(`${base}/api/balance-sheet?symbol=${encodeURIComponent(stock.symbol)}`)
     ]);
+    if(!isCurrent()) return;
     const fin = await finRes.json();
     const bal = await balRes.json();
+    if(!isCurrent()) return;
     if(!finRes.ok || !fin.ok || !balRes.ok || !bal.ok) throw new Error('官方資料不足');
     const f = fin.latest || {};
     const b = bal.latest || {};
@@ -347,20 +388,27 @@ async function loadFinancialHealth(stock){
     ];
     el.innerHTML = ratios.map(([label,val,unit])=>`<article class="health-card"><span>${label}</span><strong>${val===null?'—':val.toLocaleString('zh-TW',{maximumFractionDigits:2})}${val===null?'':unit}</strong><small>${val===null?'目前資料不足以計算':'依最新可取得官方期間計算'}</small></article>`).join('');
   }catch(err){
+    if(!isCurrent()) return;
     el.innerHTML='<div class="health-empty">目前無法完整取得計算所需的官方財務資料，StockAI 不會用假數字補上。</div>';
   }
 }
 
 async function loadBalanceSheet(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('balance', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   const content = document.getElementById('balanceSheetContent');
   const status = document.getElementById('balanceStatus');
   if(!content || !status || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
   status.textContent='讀取中…';
+  content.innerHTML='<strong>正在取得資產負債表…</strong><p>請稍候。</p>';
   try{
     const response=await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/balance-sheet?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data=await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error||'資產負債表取得失敗');
     const x=data.latest||{};
     status.textContent=`✓ 官方資料 · ${data.evidence?.date||''}`;
@@ -374,6 +422,7 @@ async function loadBalanceSheet(stock){
     <div class="source-meta">期間：${escapeHtml(x.period||'—')} · 資料日期：${escapeHtml(data.evidence?.date||'—')} · 金額原始單位：新臺幣千元</div>
     <a class="source-link" href="${data.evidence?.url||'https://data.gov.tw/'}" target="_blank" rel="noopener noreferrer">查看官方資料 ↗</a>`;
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('balance','unavailable','官方資料暫不可用');
     status.textContent='官方資料暫不可用';
     content.innerHTML='<strong>目前無法取得資產負債表</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財報。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>';
@@ -382,15 +431,21 @@ async function loadBalanceSheet(stock){
 
 
 async function loadCashFlow(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('cashflow', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   const content = document.getElementById('cashFlowContent');
   const status = document.getElementById('cashFlowStatus');
   if(!content || !status || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
   status.textContent='讀取中…';
+  content.innerHTML='<strong>正在取得現金流量表…</strong><p>請稍候。</p>';
   try{
     const response=await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/cash-flow?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data=await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error||'現金流量表取得失敗');
     const items=data.items||[];
     if(!items.length) throw new Error('沒有資料');
@@ -411,6 +466,7 @@ async function loadCashFlow(stock){
     status.textContent=`✓ 官方資料 · ${items.length} 期`;
     setResearchStatus('cashflow','ready',`${items.length} 期官方資料`);
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('cashflow','unavailable','官方資料暫不可用');
     status.textContent='官方資料暫不可用';
     content.innerHTML='<strong>目前無法取得現金流量表</strong><p>StockAI 不會用假數字補上。可直接查看公開資訊觀測站的原始財報。</p><a class="source-link" href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a>';
@@ -418,12 +474,18 @@ async function loadCashFlow(stock){
 }
 
 async function loadAnnouncements(stock){
+  const requestId = stockDataRequestId;
+  const isCurrent = () => isCurrentStockDataRequest(stock, requestId);
+  if(!isCurrent()) return;
   setResearchStatus('announcements', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? 'loading' : 'unavailable', window.STOCKAI_CONFIG?.ENABLE_LIVE_BACKEND ? '讀取中…' : '後端未啟用');
   const cfg = window.STOCKAI_CONFIG || {};
   if(!newsList || !cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
+  newsList.innerHTML = '<article class="news-card source-card"><span class="news-date">官方資料</span><h3>正在取得重大訊息…</h3><p>請稍候。</p></article>';
   try{
     const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/announcements?symbol=${encodeURIComponent(stock.symbol)}`);
+    if(!isCurrent()) return;
     const data = await response.json();
+    if(!isCurrent()) return;
     if(!response.ok || !data.ok) throw new Error(data.error || '重大訊息取得失敗');
     const items = data.items || [];
     if(!items.length){
@@ -441,6 +503,7 @@ async function loadAnnouncements(stock){
         <a href="${item.url}" target="_blank" rel="noopener noreferrer">查看 MOPS 原始資料 ↗</a>
       </article>`).join('');
   }catch(err){
+    if(!isCurrent()) return;
     setResearchStatus('announcements','unavailable','暫不可用');
     newsList.innerHTML = `<article class="news-card source-card"><span class="news-date">官方資料暫不可用</span><h3>重大訊息暫時無法取得</h3><p>這次沒有用假資料補上；可以直接查看 MOPS 原始資料。</p><a href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">查看 MOPS ↗</a></article>`;
   }
@@ -448,6 +511,7 @@ async function loadAnnouncements(stock){
 
 function renderStock(stock){
   currentStock = stock;
+  stockDataRequestId++;
   resetResearchStatus();
   resultTitle.textContent = `${stock.symbol} ${stock.name}`;
   resultSubtitle.textContent = `${stock.fullName} · ${stock.industry}`;
