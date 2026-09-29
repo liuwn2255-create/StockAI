@@ -15,6 +15,7 @@ const officialLinks = document.getElementById('officialLinks');
 const aiSummaryRequests = new Map();
 
 let currentStock = resolveStock('2330');
+let financialTrendRequestId = 0;
 
 function setActiveTab(id){
   tabs.forEach(b => b.classList.toggle('active', b.dataset.tab === id));
@@ -237,6 +238,13 @@ function renderFinancialTrends(items){
   if(note) note.textContent='圖表呈現已取得的官方財務資料；期間與數值以原始資料為準，不代表未來表現，也不構成投資建議。';
 }
 
+function renderTrendUnavailable(){
+  ['revenueChart','operatingChart','epsChart'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML='<div class="chart-empty">趨勢資料暫時無法取得</div>';
+  });
+}
+
 function formatNumber(value, digits=2){
   if(value === null || value === undefined || value === '') return '—';
   const n = Number(value);
@@ -282,15 +290,24 @@ async function loadQuarterlyFinancials(stock){
 }
 
 async function loadFinancialTrends(stock){
+  const requestId=++financialTrendRequestId;
+  const requestedSymbol=String(stock?.symbol || '');
+  if(!requestedSymbol) return;
+  const isCurrentRequest=()=>requestId===financialTrendRequestId && currentStock.symbol===requestedSymbol;
   const cfg = window.STOCKAI_CONFIG || {};
-  if(!cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL) return;
+  if(!cfg.ENABLE_LIVE_BACKEND || !cfg.API_BASE_URL){
+    if(isCurrentRequest()) renderTrendUnavailable();
+    return;
+  }
   try{
-    const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/trends?symbol=${encodeURIComponent(stock.symbol)}`);
+    const response = await fetch(`${cfg.API_BASE_URL.replace(/\/$/,'')}/api/trends?symbol=${encodeURIComponent(requestedSymbol)}`);
     const data = await response.json();
     if(!response.ok || !data.ok) throw new Error(data.error || '財務趨勢資料取得失敗');
-    renderFinancialTrends(data.items || []);
+    if(data.symbol && String(data.symbol)!==requestedSymbol) throw new Error('趨勢資料股票代號不符');
+    if(!isCurrentRequest()) return;
+    renderFinancialTrends(Array.isArray(data.items) ? data.items : []);
   }catch(_){
-    renderFinancialTrends([]);
+    if(isCurrentRequest()) renderTrendUnavailable();
   }
 }
 
