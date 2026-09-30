@@ -17,6 +17,7 @@ const aiSummaryRequests = new Map();
 let currentStock = resolveStock('2330');
 let financialTrendRequestId = 0;
 let stockDataRequestId = 0;
+let stockSearchRequestId = 0;
 
 function isCurrentStockDataRequest(stock, requestId){
   return requestId === stockDataRequestId && String(currentStock?.symbol || '') === String(stock?.symbol || '');
@@ -544,12 +545,31 @@ function showSearchMessage(message){
   setTimeout(() => el.remove(), 3500);
 }
 
-function searchStock(value){
+async function searchStock(value){
   const v = String(value || '').trim();
   if(!v){ showSearchMessage('請輸入股票名稱或代號，例如：2330 或 台積電'); return; }
-  const stock = resolveStock(v);
+  const requestId = ++stockSearchRequestId;
+  const cfg = window.STOCKAI_CONFIG || {};
+  let stock = null;
+
+  // The Worker’s TWSE-backed resolver is the authoritative source. The small
+  // browser list is retained only as an offline fallback (for example ETF 0050).
+  if(cfg.ENABLE_LIVE_BACKEND && cfg.API_BASE_URL){
+    try{
+      const url = `${cfg.API_BASE_URL.replace(/\/$/, '')}/api/stock-profile?symbol=${encodeURIComponent(v)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if(requestId !== stockSearchRequestId) return;
+      if(response.ok && data.ok && data.stock?.symbol) stock = data.stock;
+    }catch(_){
+      // Preserve the existing curated list as a fallback if the Worker is unavailable.
+    }
+  }
+
+  if(!stock) stock = resolveStock(v);
+  if(requestId !== stockSearchRequestId) return;
   if(!stock){
-    showSearchMessage(`目前前端識別器找不到「${v}」。完整股票名單將由後端資料來源補上。`);
+    showSearchMessage(`目前無法識別「${v}」。請確認這是有效的臺灣證券交易所上市公司代號或名稱。`);
     return;
   }
   if(currentStock?.symbol !== stock.symbol){
